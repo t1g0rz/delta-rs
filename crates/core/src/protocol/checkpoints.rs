@@ -145,6 +145,12 @@ pub async fn create_checkpoint_for(
     state: &DeltaTableState,
     log_store: &dyn LogStore,
 ) -> Result<(), ProtocolError> {
+    if !state.load_config().require_files {
+        return Err(ProtocolError::Generic(
+            "Table has not yet been initialized with files, therefore creating a checkpoint is not possible.".to_string()
+        ));
+    }
+
     if version != state.version() {
         error!(
             "create_checkpoint_for called with version {version} but table state contains: {}. The table state may need to be reloaded",
@@ -284,7 +290,9 @@ fn parquet_bytes_from_state(
             remove.extended_file_metadata = Some(false);
         }
     }
-    let files = state.file_actions_iter().unwrap();
+    let files = state
+        .file_actions_iter()
+        .map_err(|e| ProtocolError::Generic(e.to_string()))?;
     // protocol
     let jsons = std::iter::once(Action::Protocol(Protocol {
         min_reader_version: state.protocol().min_reader_version,
